@@ -13,7 +13,6 @@ main :: IO ()
 main = do
   world <- generateNewWorld
   playIO window white 3 world drawWorld eventHandler stepWorld
-  return ()
 
 -- window parameter
 wWidth, wHeight :: Num a => a
@@ -115,11 +114,11 @@ randomInitTetrimino gen = convertIntToInitTetrimino <$> uniformR (0,6) gen <*> u
 generateNewWorld :: IO World
 generateNewWorld = do
   field <- newArray ((0,0), (cWidth-1,cHeight+2)) (False, white)
-  tetrimino <- withSystemRandom . asGenIO $ \gen -> randomInitTetrimino gen
-  return $ World { _state = InGame
-                 , _field = field
-                 , _tetrimino = tetrimino
-                 }
+  tetrimino <- withSystemRandom . asGenIO $ randomInitTetrimino
+  pure World { _state = InGame
+             , _field = field
+             , _tetrimino = tetrimino
+             }
 
 checkCollided :: Field -> Tetrimino -> IO Bool
 checkCollided f t = or <$> forM (convertTetriminoToPoints t) (fmap fst . readArray f)
