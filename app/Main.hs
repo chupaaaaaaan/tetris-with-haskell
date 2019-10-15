@@ -9,14 +9,13 @@ import Data.Array.IO
 import Graphics.Gloss.Interface.IO.Game
 import System.Random.MWC
 
-data Tetrimino = TO { _r :: Int, _x :: Int, _y :: Int }
-               | TI { _r :: Int, _x :: Int, _y :: Int }
-               | TS { _r :: Int, _x :: Int, _y :: Int }
-               | TZ { _r :: Int, _x :: Int, _y :: Int }
-               | TJ { _r :: Int, _x :: Int, _y :: Int }
-               | TL { _r :: Int, _x :: Int, _y :: Int }
-               | TT { _r :: Int, _x :: Int, _y :: Int }
+main :: IO ()
+main = do
+  world <- generateNewWorld
+  playIO window white 3 world drawWorld eventHandler stepWorld
+  return ()
 
+-- window parameter
 wWidth, wHeight :: Num a => a
 wWidth = 300
 wHeight = 600
@@ -24,16 +23,21 @@ wHeight = 600
 window :: Display
 window = InWindow "tetris" (wWidth,wHeight) (100,100)
 
-main :: IO ()
-main = do
-  world <- generateNewWorld
-  playIO window white 1 world drawWorld eventHandler stepWorld
-  return ()
-
+-- game parameter
 cSize, cWidth, cHeight :: Num a => a
-cSize = 30
+cSize = 20
 cWidth = fromIntegral $ wWidth `div` cSize
 cHeight = fromIntegral $ wHeight `div` cSize
+
+
+
+data Tetrimino = TO { _r :: Int, _x :: Int, _y :: Int }
+               | TI { _r :: Int, _x :: Int, _y :: Int }
+               | TS { _r :: Int, _x :: Int, _y :: Int }
+               | TZ { _r :: Int, _x :: Int, _y :: Int }
+               | TJ { _r :: Int, _x :: Int, _y :: Int }
+               | TL { _r :: Int, _x :: Int, _y :: Int }
+               | TT { _r :: Int, _x :: Int, _y :: Int }
 
 data TetriminoAction = TALeft
                      | TARight
@@ -56,6 +60,17 @@ rotN TZ{} = 2
 rotN TJ{} = 4
 rotN TL{} = 4
 rotN TT{} = 4
+
+
+data GameState = InGame | GameOver
+
+type Field = IOArray (Int,Int) (Bool, Color)
+
+data World = World
+  { _state :: GameState
+  , _field :: Field
+  , _tetrimino :: Tetrimino
+  }
 
 convertTetriminoToPoints :: Tetrimino -> [(Int,Int)]
 convertTetriminoToPoints TO{..} = [(_x,_y),(_x-1,_y),(_x,_y-1),(_x-1,_y-1)]
@@ -84,30 +99,18 @@ convertTetriminoToPoints TT{..}
   | _r == 2 = [(_x,_y),(_x-1,_y),(_x+1,_y),(_x,_y+1)]
   | _r == 3 = [(_x,_y),(_x,_y-1),(_x,_y+1),(_x-1,_y)]
 
-convertIntToInitTetrimino :: Int -> Int -> Int -> Tetrimino
-convertIntToInitTetrimino n x r
-  | n == 0 = TO { _r = 0,         _x = cWidth `div` 2 - x, _y = cHeight + 1 }
-  | n == 1 = TI { _r = r `mod` 2, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
-  | n == 2 = TS { _r = r `mod` 2, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
-  | n == 3 = TZ { _r = r `mod` 2, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
-  | n == 4 = TJ { _r = r `mod` 4, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
-  | n == 5 = TL { _r = r `mod` 4, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
-  | n == 6 = TT { _r = r `mod` 4, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
-  | otherwise = convertIntToInitTetrimino (n`mod`7) x r
-
-
 randomInitTetrimino :: GenIO -> IO Tetrimino
 randomInitTetrimino gen = convertIntToInitTetrimino <$> uniformR (0,6) gen <*> uniformR (0,1) gen <*> uniformR (0,3) gen
-
-data GameState = InGame | GameOver
-
-type Field = IOArray (Int,Int) (Bool, Color)
-
-data World = World
-  { _state :: GameState
-  , _field :: Field
-  , _tetrimino :: Tetrimino
-  }
+  where convertIntToInitTetrimino :: Int -> Int -> Int -> Tetrimino
+        convertIntToInitTetrimino n x r
+          | n == 0 = TO { _r = 0,         _x = cWidth `div` 2 - x, _y = cHeight + 1 }
+          | n == 1 = TI { _r = r `mod` 2, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
+          | n == 2 = TS { _r = r `mod` 2, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
+          | n == 3 = TZ { _r = r `mod` 2, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
+          | n == 4 = TJ { _r = r `mod` 4, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
+          | n == 5 = TL { _r = r `mod` 4, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
+          | n == 6 = TT { _r = r `mod` 4, _x = cWidth `div` 2 - x, _y = cHeight + 1 }
+          | otherwise = convertIntToInitTetrimino (n`mod`7) x r
 
 generateNewWorld :: IO World
 generateNewWorld = do
@@ -118,38 +121,11 @@ generateNewWorld = do
                  , _tetrimino = tetrimino
                  }
 
-allBlocks :: Field -> IO [((Int,Int),(Bool, Color))]
-allBlocks f = filter (\(_,(b,_)) -> b) <$> getAssocs f
-
 checkCollided :: Field -> Tetrimino -> IO Bool
 checkCollided f t = or <$> forM (convertTetriminoToPoints t) (fmap fst . readArray f)
 
 checkOutOfField :: Tetrimino -> IO Bool
 checkOutOfField t = or <$> forM (convertTetriminoToPoints t) (\(x,y) -> pure $ x < 0 || x >= cWidth || y < 0)
-
-cell :: Picture
-cell = polygon [(0,0),(0,cSize),(cSize,cSize),(cSize,0)]
-
-drawCell :: Color -> (Int,Int) -> Picture
-drawCell c (x, y) = translate (fromIntegral x * cSize - wWidth / 2) (fromIntegral y * cSize - wHeight / 2) $ color c cell
-
-drawTetrimino :: Color -> Tetrimino -> Picture
-drawTetrimino c t = pictures $ map (drawCell c) (convertTetriminoToPoints t)
-
-drawWorld :: World -> IO Picture
-drawWorld World{..} = do
-  blocks <- allBlocks _field
-  case _state of
-    InGame -> pure $ pictures
-        [ pictures $ map (\(xy,(_,c)) -> drawCell c xy) blocks
-        , drawTetrimino blue _tetrimino
-        ]
-    GameOver -> pure $ pictures
-        [ pictures $ map (\(xy,(_,c)) -> drawCell c xy) blocks
-        , drawTetrimino red _tetrimino
-        , translate (-wWidth / 2 + cSize) (-wHeight / 2 + cSize) . scale 0.2 0.2 $ text "Game Over!"
-        ]
-
 
 eventHandler :: Event -> World -> IO World
 eventHandler e w@World{..} = case _state of
@@ -201,3 +177,26 @@ stepWorld _ w@World{..} = case _state of
             then pure w { _field = newField, _state = GameOver }
             else do newTetrimino <- withSystemRandom . asGenIO $ randomInitTetrimino
                     pure w { _field = newField, _tetrimino = newTetrimino }
+
+cell :: Picture
+cell = polygon [(0,0),(0,cSize),(cSize,cSize),(cSize,0)]
+
+drawCell :: Color -> (Int,Int) -> Picture
+drawCell c (x, y) = translate (fromIntegral x * cSize - wWidth / 2) (fromIntegral y * cSize - wHeight / 2) $ color c cell
+
+drawTetrimino :: Color -> Tetrimino -> Picture
+drawTetrimino c t = pictures $ map (drawCell c) (convertTetriminoToPoints t)
+
+drawWorld :: World -> IO Picture
+drawWorld World{..} = do
+  blocks <- filter (\(_,(b,_)) -> b) <$> getAssocs _field
+  case _state of
+    InGame -> pure $ pictures
+        [ pictures $ map (\(xy,(_,c)) -> drawCell c xy) blocks
+        , drawTetrimino blue _tetrimino
+        ]
+    GameOver -> pure $ pictures
+        [ pictures $ map (\(xy,(_,c)) -> drawCell c xy) blocks
+        , drawTetrimino red _tetrimino
+        , translate (-wWidth / 2 + cSize) (-wHeight / 2 + cSize) . scale 0.2 0.2 $ text "Game Over!"
+        ]
