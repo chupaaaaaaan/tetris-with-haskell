@@ -172,7 +172,10 @@ eventHandler e w@World{..} = case _state of
 eraseRows :: Field -> IO Field
 eraseRows f = go 0 0
   where go y h
-          | y + h >= cHeight = pure f
+          | y + h >= cHeight = do
+              uBoundY <- snd . snd <$> getBounds f
+              forM_ [y..uBoundY] $ \y' -> forM_ [0..cWidth-1] $ \x -> writeArray f (x,y') (False, greyN 0.5)
+              pure f
           | otherwise = do
               forM_ [0..cWidth-1] $ \x -> readArray f (x,y+h) >>= writeArray f (x,y)
               mino <- and <$> forM [0..cWidth-1] (\x -> fst <$> readArray f (x,y))
@@ -196,5 +199,5 @@ stepWorld _ w@World{..} = case _state of
           r2 <- fst <$> readArray newField (cWidth `div` 2    , cHeight - 1)
           if r1 || r2
             then pure w { _field = newField, _state = GameOver }
-            else do newTetrimino <- withSystemRandom . asGenIO $ \gen -> randomInitTetrimino gen
+            else do newTetrimino <- withSystemRandom . asGenIO $ randomInitTetrimino
                     pure w { _field = newField, _tetrimino = newTetrimino }
